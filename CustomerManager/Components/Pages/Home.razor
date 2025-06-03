@@ -1,0 +1,306 @@
+﻿@page "/"
+@using CustomerManager.Models
+@using CustomerManager.Services
+@inject CustomerService CustomerService
+@rendermode InteractiveServer
+
+<PageTitle>Customers</PageTitle>
+
+<h1>Customer Management</h1>
+
+<div class="mb-3">
+    <button class="btn btn-primary" @onclick="SeedData">Seed Sample Data</button>
+    <button class="btn btn-secondary ms-2" @onclick="LoadCustomers">Refresh</button>
+    <button class="btn btn-success ms-2" @onclick="ShowAddForm">
+        <i class="bi bi-plus-circle"></i> Add Customer
+    </button>
+</div>
+
+@* Add Customer Form *@
+@if (showAddForm)
+{
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5>Add New Customer</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">Name *</label>
+                        <input type="text" class="form-control" @bind="newCustomer.Name" placeholder="Enter customer name" />
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">Email *</label>
+                        <input type="email" class="form-control" @bind="newCustomer.Email" placeholder="Enter email address" />
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">Phone</label>
+                        <input type="text" class="form-control" @bind="newCustomer.Phone" placeholder="Enter phone number" />
+                    </div>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-success" @onclick="AddCustomer" disabled="@isLoading">
+                    @if (isLoading)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                    }
+                    Save Customer
+                </button>
+                <button class="btn btn-secondary" @onclick="CancelAdd">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (isLoading)
+{
+    <div class="spinner-border" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+}
+else if (customers != null && customers.Any())
+{
+    <div class="row">
+        <div class="col-md-12">
+            <h3>Customer List (@customers.Count customers)</h3>
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Phone</th>
+                            <th>Created Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var customer in customers)
+                        {
+                            <tr>
+                                <td>@customer.Id</td>
+                                <td>@customer.Name</td>
+                                <td>@customer.Email</td>
+                                <td>@customer.Phone</td>
+                                <td>@customer.CreatedDate.ToString("MM/dd/yyyy")</td>
+                                <td>
+                                    <button class="btn btn-sm btn-danger" @onclick="() => DeleteCustomer(customer.Id)">
+                                        Delete
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="alert alert-info">
+        <h4>No customers found</h4>
+        <p>Click "Seed Sample Data" to add some sample customers or "Add Customer" to create a new one.</p>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(message))
+{
+    <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
+        @message
+        <button type="button" class="btn-close" @onclick="() => message = string.Empty"></button>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
+        @errorMessage
+        <button type="button" class="btn-close" @onclick="() => errorMessage = string.Empty"></button>
+    </div>
+}
+
+@code {
+    private List<Customer>? customers;
+    private bool isLoading = false;
+    private string message = string.Empty;
+    private string errorMessage = string.Empty;
+    
+    // Add Customer form variables
+    private bool showAddForm = false;
+    private Customer newCustomer = new Customer();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCustomers();
+    }
+
+    private async Task LoadCustomers()
+    {
+        try
+        {
+            isLoading = true;
+            customers = await CustomerService.GetAllCustomersAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading customers: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ShowAddForm()
+    {
+        showAddForm = true;
+        newCustomer = new Customer(); // Reset form
+        message = string.Empty;
+        errorMessage = string.Empty;
+    }
+
+    private void CancelAdd()
+    {
+        showAddForm = false;
+        newCustomer = new Customer();
+    }
+
+    private async Task AddCustomer()
+    {
+        try
+        {
+            // Basic validation
+            if (string.IsNullOrWhiteSpace(newCustomer.Name))
+            {
+                errorMessage = "Customer name is required.";
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(newCustomer.Email))
+            {
+                errorMessage = "Customer email is required.";
+                return;
+            }
+
+            isLoading = true;
+            
+            // Set creation date
+            newCustomer.CreatedDate = DateTime.Now;
+            
+            // Add customer to database
+            await CustomerService.CreateCustomerAsync(newCustomer);
+            
+            message = $"Customer '{newCustomer.Name}' added successfully!";
+            showAddForm = false;
+            newCustomer = new Customer(); // Reset form
+            
+            // Reload customers
+            await LoadCustomers();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error adding customer: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SeedData()
+    {
+        try
+        {
+            isLoading = true;
+            
+            // Check if we already have customers
+            var existingCustomers = await CustomerService.GetAllCustomersAsync();
+            if (existingCustomers.Any())
+            {
+                message = "Sample data already exists. Use 'Refresh' to reload the data.";
+                return;
+            }
+
+            // Create sample customers
+            var sampleCustomers = new List<Customer>
+            {
+                new Customer 
+                { 
+                    Name = "John Smith", 
+                    Email = "john.smith@email.com", 
+                    Phone = "(555) 123-4567",
+                    CreatedDate = DateTime.Now.AddDays(-30)
+                },
+                new Customer 
+                { 
+                    Name = "Jane Doe", 
+                    Email = "jane.doe@email.com", 
+                    Phone = "(555) 987-6543",
+                    CreatedDate = DateTime.Now.AddDays(-25)
+                },
+                new Customer 
+                { 
+                    Name = "Bob Johnson", 
+                    Email = "bob.johnson@email.com", 
+                    Phone = "(555) 456-7890",
+                    CreatedDate = DateTime.Now.AddDays(-20)
+                },
+                new Customer 
+                { 
+                    Name = "Alice Brown", 
+                    Email = "alice.brown@email.com", 
+                    Phone = "(555) 321-0987",
+                    CreatedDate = DateTime.Now.AddDays(-15)
+                },
+                new Customer 
+                { 
+                    Name = "Charlie Wilson", 
+                    Email = "charlie.wilson@email.com", 
+                    Phone = "(555) 654-3210",
+                    CreatedDate = DateTime.Now.AddDays(-10)
+                }
+            };
+
+            // Add customers to database
+            foreach (var customer in sampleCustomers)
+            {
+                await CustomerService.CreateCustomerAsync(customer);
+            }
+
+            message = $"Successfully seeded {sampleCustomers.Count} sample customers!";
+            await LoadCustomers();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error seeding data: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task DeleteCustomer(int customerId)
+    {
+        try
+        {
+            await CustomerService.DeleteCustomerAsync(customerId);
+            message = "Customer deleted successfully!";
+            await LoadCustomers();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error deleting customer: {ex.Message}";
+        }
+    }
+}
